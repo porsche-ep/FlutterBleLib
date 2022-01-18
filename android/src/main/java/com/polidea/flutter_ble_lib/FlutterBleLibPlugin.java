@@ -32,14 +32,16 @@ import java.util.LinkedList;
 import java.util.List;
 
 import androidx.annotation.NonNull;
+import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
-import io.flutter.plugin.common.PluginRegistry.Registrar;
+import io.flutter.plugin.common.PluginRegistry;
+import io.flutter.embedding.engine.plugins.FlutterPlugin;
 
-public class FlutterBleLibPlugin implements MethodCallHandler {
+public class FlutterBleLibPlugin implements MethodCallHandler, FlutterPlugin {
 
     static final String TAG = FlutterBleLibPlugin.class.getName();
 
@@ -51,30 +53,44 @@ public class FlutterBleLibPlugin implements MethodCallHandler {
     private ConnectionStateStreamHandler connectionStateStreamHandler = new ConnectionStateStreamHandler();
     private CharacteristicsMonitorStreamHandler characteristicsMonitorStreamHandler = new CharacteristicsMonitorStreamHandler();
 
+    private MethodChannel methodChannel;
     private List<CallDelegate> delegates = new LinkedList<>();
 
-    public static void registerWith(Registrar registrar) {
-        final MethodChannel channel = new MethodChannel(registrar.messenger(), ChannelName.FLUTTER_BLE_LIB);
-
-        final EventChannel bluetoothStateChannel = new EventChannel(registrar.messenger(), ChannelName.ADAPTER_STATE_CHANGES);
-        final EventChannel restoreStateChannel = new EventChannel(registrar.messenger(), ChannelName.STATE_RESTORE_EVENTS);
-        final EventChannel scanningChannel = new EventChannel(registrar.messenger(), ChannelName.SCANNING_EVENTS);
-        final EventChannel connectionStateChannel = new EventChannel(registrar.messenger(), ChannelName.CONNECTION_STATE_CHANGE_EVENTS);
-        final EventChannel characteristicMonitorChannel = new EventChannel(registrar.messenger(), ChannelName.MONITOR_CHARACTERISTIC);
-
-        final FlutterBleLibPlugin plugin = new FlutterBleLibPlugin(registrar.context());
-
-        channel.setMethodCallHandler(plugin);
-
-        scanningChannel.setStreamHandler(plugin.scanningStreamHandler);
-        bluetoothStateChannel.setStreamHandler(plugin.adapterStateStreamHandler);
-        restoreStateChannel.setStreamHandler(plugin.restoreStateStreamHandler);
-        connectionStateChannel.setStreamHandler(plugin.connectionStateStreamHandler);
-        characteristicMonitorChannel.setStreamHandler(plugin.characteristicsMonitorStreamHandler);
-    }
+    public FlutterBleLibPlugin() { }
 
     private FlutterBleLibPlugin(Context context) {
         this.context = context;
+    }
+
+    @Override
+    public void onAttachedToEngine(FlutterPluginBinding binding) {
+        context = binding.getApplicationContext();
+        final BinaryMessenger messenger = binding.getBinaryMessenger();
+        methodChannel = new MethodChannel(messenger, ChannelName.FLUTTER_BLE_LIB);
+
+        final EventChannel bluetoothStateChannel =
+            new EventChannel(messenger, ChannelName.ADAPTER_STATE_CHANGES);
+        final EventChannel restoreStateChannel =
+            new EventChannel(messenger, ChannelName.STATE_RESTORE_EVENTS);
+        final EventChannel scanningChannel =
+            new EventChannel(messenger, ChannelName.SCANNING_EVENTS);
+        final EventChannel connectionStateChannel =
+            new EventChannel(messenger, ChannelName.CONNECTION_STATE_CHANGE_EVENTS);
+        final EventChannel characteristicMonitorChannel =
+            new EventChannel(messenger, ChannelName.MONITOR_CHARACTERISTIC);
+
+        methodChannel.setMethodCallHandler(this);
+        scanningChannel.setStreamHandler(this.scanningStreamHandler);
+        bluetoothStateChannel.setStreamHandler(this.adapterStateStreamHandler);
+        restoreStateChannel.setStreamHandler(this.restoreStateStreamHandler);
+        connectionStateChannel.setStreamHandler(this.connectionStateStreamHandler);
+        characteristicMonitorChannel.setStreamHandler(this.characteristicsMonitorStreamHandler);
+    }
+
+    @Override
+    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+        methodChannel.setMethodCallHandler(null);
+        context = null;
     }
 
     private void setupAdapter(Context context) {
